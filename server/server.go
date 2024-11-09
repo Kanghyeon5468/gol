@@ -14,6 +14,8 @@ import (
 
 var distWorkerNum int
 
+var workerCount int
+
 var quitting = make(chan bool, 1)
 
 type RestartInfo struct {
@@ -308,29 +310,33 @@ func closeWorkers(workers []*rpc.Client) {
 	}
 }
 
-func calculateNextWorld(currentWorld [][]uint8, size, workerNum int) [][]uint8 {
-	var newWorld [][]uint8
-	splitSegments := make([]chan [][]uint8, workerNum)
-	for i := range splitSegments {
-		splitSegments[i] = make(chan [][]uint8)
-	}
-
-
-	workerPrivateAddress := [8]string{"172.31.24.115:8040","172.31.18.64:8050","172.31.31.193:8060","172.31.21.74:8070","172.31.17.226:8080","172.31.26.116:8090","172.31.26.101:9000"}
+func dialWorkers(workerNum int) []*rpc.Client {
+	workerPrivateAddress := [8]string{"172.31.24.115:8040", "172.31.18.64:8050", "172.31.31.193:8060", "172.31.21.74:8070", "172.31.17.226:8080", "172.31.26.116:8090", "172.31.26.101:9000"}
 	workers := make([]*rpc.Client, workerNum)
 
 	for i := 0; i < workerNum; i++ {
-		worker, err := rpc.Dial("tcp", workerPrivateAddress[i])
+		worker, err := rpc.Dial("tcp", fmt.Sprintf("%v%v", workerPrivateAddress[i]))
 		if err != nil {
 			fmt.Println(err)
 		}
 		workers[i] = worker
 	}
 
+	return workers
+}
+
+func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, workerNum int) [][]uint8 {
+	var newWorld [][]uint8
+	splitSegments := make([]chan [][]uint8, workerNum)
+	for i := range splitSegments {
+		splitSegments[i] = make(chan [][]uint8)
+	}
+
 	setupWorkers(workers, size, workerNum, currentWorld, splitSegments)
 	// no wait group needed as channel waits for worker to finish
 	for i := 0; i < workerNum; i++ {
-		newWorld = append(newWorld, <-splitSegments[i]...)
+		temp := <-splitSegments[i]
+		newWorld = append(newWorld, temp...)
 	}
 
 	//closeWorkers(workers)
@@ -349,10 +355,11 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 			return errors.New("nothing to restart with")
 		}
 	}
+	workers := dialWorkers(workerCount)
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld = calculateNextWorld(currentWorld, req.ImageWidth, 5)
+		nextWorld = calculateNextWorld(workers, currentWorld, req.ImageWidth, 1)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
