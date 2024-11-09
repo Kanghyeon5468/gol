@@ -14,6 +14,8 @@ import (
 
 var distWorkerNum int
 
+var workerCount int
+
 var quitting = make(chan bool, 1)
 
 type RestartInfo struct {
@@ -309,13 +311,14 @@ func closeWorkers(workers []*rpc.Client) {
 }
 
 func dialWorkers(workerNum int) []*rpc.Client {
-
 	serverAddress := "127.0.0.1"
 	workerPorts := [8]string{":8040", ":8050", ":8060", ":8070", ":8080", ":8090", ":9000", ":9010"}
+	//workerPrivateAddress := [8]string{"172.31.24.115:8040", "172.31.18.64:8050", "172.31.31.193:8060", "172.31.21.74:8070", "172.31.17.226:8080", "172.31.26.116:8090", "172.31.26.101:9000"}
 	workers := make([]*rpc.Client, workerNum)
 
 	for i := 0; i < workerNum; i++ {
 		worker, err := rpc.Dial("tcp", fmt.Sprintf("%v%v", serverAddress, workerPorts[i]))
+		// worker, err := rpc.Dial("tcp", workerPrivateAddress[i])
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -325,16 +328,18 @@ func dialWorkers(workerNum int) []*rpc.Client {
 	return workers
 }
 
-func calculateNextWorld(currentWorld [][]uint8, size, workerNum int) [][]uint8 {
+func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, workerNum int) [][]uint8 {
 	var newWorld [][]uint8
 	splitSegments := make([]chan [][]uint8, workerNum)
 	for i := range splitSegments {
 		splitSegments[i] = make(chan [][]uint8)
 	}
+
 	setupWorkers(workers, size, workerNum, currentWorld, splitSegments)
 	// no wait group needed as channel waits for worker to finish
 	for i := 0; i < workerNum; i++ {
-		newWorld = append(newWorld, <-splitSegments[i]...)
+		temp := <-splitSegments[i]
+		newWorld = append(newWorld, temp...)
 	}
 
 	//closeWorkers(workers)
@@ -353,10 +358,11 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 			return errors.New("nothing to restart with")
 		}
 	}
+	workers := dialWorkers(workerCount)
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld = calculateNextWorld(currentWorld, req.ImageWidth, distWorkerNum)
+		nextWorld = calculateNextWorld(workers, currentWorld, req.ImageWidth, 1)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
@@ -405,13 +411,13 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 
 func main() {
 	serverPort := flag.String("port", "8030", "Port to Listen")
-	workers := flag.Int("workerNum", 2, "Workers to use")
+	workers := flag.Int("threads", 1, "How many workers to use")
 	flag.Parse()
 
 	distWorkerNum = *workers
 
 	rpc.Register(&Server{})
-	listener, err := net.Listen("tcp", "127.0.0.1:"+*serverPort)
+	listener, err := net.Listen("tcp", "0.0.0.0:"+*serverPort)
 	if err != nil {
 		log.Fatal("Listener error:", err)
 	}
