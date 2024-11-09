@@ -199,7 +199,7 @@ func copyOf(world [][]uint8, p Params) [][]uint8 {
 // Manage client-server interaction and distribute work across routines
 func distributor(p Params, c distributorChannels, restart bool) {
 
-	serverAddress := "0.0.0.0:8030"
+	serverAddress := "35.178.65.187:8030"
 	client, err := rpc.Dial("tcp", serverAddress)
 	if err != nil {
 		log.Fatal("dialing", err)
