@@ -316,7 +316,7 @@ func calculateNextWorld(currentWorld [][]uint8, size, workerNum int) [][]uint8 {
 	}
 
 
-	workerPrivateAddress := [8]string{"172.31.24.115:8040","172.31.18.64:8050","172.31.31.193:8060"}
+	workerPrivateAddress := [8]string{"172.31.24.115:8040","172.31.18.64:8050","172.31.31.193:8060","172.31.21.74:8070"}
 	workers := make([]*rpc.Client, workerNum)
 
 	for i := 0; i < workerNum; i++ {
@@ -352,7 +352,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld = calculateNextWorld(currentWorld, req.ImageWidth, 2)
+		nextWorld = calculateNextWorld(currentWorld, req.ImageWidth, 4)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
