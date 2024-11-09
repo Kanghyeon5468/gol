@@ -358,11 +358,11 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 			return errors.New("nothing to restart with")
 		}
 	}
-	workers := dialWorkers(workerCount)
+	workers := dialWorkers(distWorkerNum)
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld = calculateNextWorld(workers, currentWorld, req.ImageWidth, 1)
+		nextWorld = calculateNextWorld(workers, currentWorld, req.ImageWidth, distWorkerNum)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
