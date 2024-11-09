@@ -308,12 +308,7 @@ func closeWorkers(workers []*rpc.Client) {
 	}
 }
 
-func calculateNextWorld(currentWorld [][]uint8, size, workerNum int) [][]uint8 {
-	var newWorld [][]uint8
-	splitSegments := make([]chan [][]uint8, workerNum)
-	for i := range splitSegments {
-		splitSegments[i] = make(chan [][]uint8)
-	}
+func dialWorkers(workerNum int) []*rpc.Client {
 
 	serverAddress := "127.0.0.1"
 	workerPorts := [8]string{":8040", ":8050", ":8060", ":8070", ":8080", ":8090", ":9000", ":9010"}
@@ -327,6 +322,15 @@ func calculateNextWorld(currentWorld [][]uint8, size, workerNum int) [][]uint8 {
 		workers[i] = worker
 	}
 
+	return workers
+}
+
+func calculateNextWorld(currentWorld [][]uint8, size, workerNum int) [][]uint8 {
+	var newWorld [][]uint8
+	splitSegments := make([]chan [][]uint8, workerNum)
+	for i := range splitSegments {
+		splitSegments[i] = make(chan [][]uint8)
+	}
 	setupWorkers(workers, size, workerNum, currentWorld, splitSegments)
 	// no wait group needed as channel waits for worker to finish
 	for i := 0; i < workerNum; i++ {
