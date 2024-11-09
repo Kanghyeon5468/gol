@@ -309,7 +309,7 @@ func closeWorkers(workers []*rpc.Client) {
 }
 
 func dialWorkers(workerNum int) []*rpc.Client {
-	workerPrivateAddress := [8]string{"172.31.24.115:8040", "172.31.18.64:8050", "172.31.31.193:8060", "172.31.21.74:8070", "172.31.17.226:8080", "172.31.26.116:8090", "172.31.26.101:9000"}
+	workerPrivateAddress := [8]string{"172.31.24.115:8040", "172.31.18.64:8050", "172.31.31.193:8060", "172.31.21.74:8070", "172.31.17.226:8080", "172.31.26.116:8090", "172.31.26.101:9000","172.31.25.71:9010"}
 	workers := make([]*rpc.Client, workerNum)
 
 	for i := 0; i < workerNum; i++ {
