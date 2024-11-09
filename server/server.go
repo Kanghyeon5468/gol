@@ -352,7 +352,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld = calculateNextWorld(currentWorld, req.ImageWidth, 3)
+		nextWorld = calculateNextWorld(currentWorld, req.ImageWidth, 4)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
