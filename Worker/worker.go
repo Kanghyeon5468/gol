@@ -76,7 +76,7 @@ func calculateNeighbor(x, y int, world [][]uint8, width int) int {
 }
 
 func main() {
-	serverPort := flag.String("port", "8040", "Port to Listen")
+	serverPort := flag.String("port", "8030", "Port to Listen")
 	flag.Parse()
 
 	rpc.Register(&Node{})
