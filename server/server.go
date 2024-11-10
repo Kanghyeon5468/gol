@@ -369,7 +369,7 @@ func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, wor
 // }
 
 func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
-	var flipped []util.Cell
+	// var flipped []util.Cell
 	currentWorld := req.OldWorld
 	nextWorld := makeNewWorld(req.ImageHeight, req.ImageWidth)
 	turn := 0
