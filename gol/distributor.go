@@ -251,7 +251,7 @@ func updateSDL(done chan bool, c distributorChannels) {
 
 // Manage client-server interaction and distribute work across routines
 func distributor(p Params, c distributorChannels, restart bool) {
-	serverAddress := "127.0.0.1:8030"
+	serverAddress := "18.170.66.239:8030"
 	client, err := rpc.Dial("tcp", serverAddress)
 	if err != nil {
 		log.Fatal("dialing", err)
