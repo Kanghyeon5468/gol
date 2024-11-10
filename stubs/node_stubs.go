@@ -1,5 +1,7 @@
 package stubs
 
+import "uk.ac.bris.cs/gameoflife/util"
+
 var CalculateWorldSegment = "Node.GetSegment"
 var End = "Node.Quit"
 
@@ -12,4 +14,5 @@ type WorkerRequest struct {
 
 type WorkerResponse struct {
 	Segment [][]uint8
+	Flipped []util.Cell
 }

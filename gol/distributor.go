@@ -3,13 +3,44 @@ package gol
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/rpc"
+	"sync"
 	"time"
 	"uk.ac.bris.cs/gameoflife/stubs"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
 var quit bool
+
+var sdlUpdated chan bool
+
+var waitSDL sync.WaitGroup
+
+type LiveView struct{}
+
+var sdlCells cellsFlipped
+
+type cellsFlipped struct {
+	mu    sync.Mutex
+	cells []util.Cell
+	turn  int
+}
+
+func (c *cellsFlipped) read() ([]util.Cell, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.cells, c.turn
+}
+
+func (c *cellsFlipped) write(new []util.Cell, turns int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.cells = new
+	c.turn = turns
+}
 
 type distributorChannels struct {
 	events     chan<- Event
@@ -19,6 +50,14 @@ type distributorChannels struct {
 	ioOutput   chan<- uint8
 	ioInput    <-chan uint8
 	keyPresses <-chan rune
+}
+
+func (s *LiveView) TakeInfo(req stubs.LiveRequest, _ *stubs.LiveResponse) error {
+	waitSDL.Add(1)
+	sdlCells.write(req.Flipped, req.Turn)
+	sdlUpdated <- true
+	waitSDL.Wait()
+	return nil
 }
 
 // Create and initialize a new 2D grid with given dimensions
@@ -50,6 +89,7 @@ func loadInitialState(p Params, c distributorChannels) [][]uint8 {
 			}
 		}
 	}
+	c.events <- TurnComplete{0}
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 	return world
@@ -196,9 +236,22 @@ func copyOf(world [][]uint8, p Params) [][]uint8 {
 	return worldNew
 }
 
+func updateSDL(done chan bool, c distributorChannels) {
+	for {
+		select {
+		case <-done:
+			return
+		case <-sdlUpdated:
+			cells, turn := sdlCells.read()
+			c.events <- CellsFlipped{turn, cells}
+			c.events <- TurnComplete{turn + 1}
+			waitSDL.Done()
+		}
+	}
+}
+
 // Manage client-server interaction and distribute work across routines
 func distributor(p Params, c distributorChannels, restart bool) {
-
 	serverAddress := "127.0.0.1:8030"
 	client, err := rpc.Dial("tcp", serverAddress)
 	if err != nil {
@@ -206,7 +259,17 @@ func distributor(p Params, c distributorChannels, restart bool) {
 	}
 	defer client.Close()
 
+	rpc.Register(&LiveView{})
+	listener, err := net.Listen("tcp", "0.0.0.0:8020")
+	if err != nil {
+		log.Fatal("Listener error:", err)
+	}
+	log.Println("Server listening on port 8020")
+	defer listener.Close()
+	go rpc.Accept(listener)
+
 	initialWorld := loadInitialState(p, c)
+	c.events <- StateChange{0, Executing}
 
 	req := stubs.Request{
 		OldWorld:    initialWorld,
@@ -219,11 +282,12 @@ func distributor(p Params, c distributorChannels, restart bool) {
 	res := new(stubs.Response)
 
 	done := make(chan bool)
+	sdlUpdated = make(chan bool, 1)
 	defer close(done)
 	go runTicker(done, client, c)
 	go runKeyPressController(client, c, p)
+	go updateSDL(done, c)
 
-	c.events <- StateChange{0, Executing}
 	executeTurn(client, req, res)
 
 	saveGameState(p, c, res.Turns, copyOf(res.NewWorld, p))
@@ -235,6 +299,7 @@ func distributor(p Params, c distributorChannels, restart bool) {
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 	c.events <- StateChange{res.Turns, Quitting}
+	done <- true
 	done <- true
 	close(c.events)
 }
