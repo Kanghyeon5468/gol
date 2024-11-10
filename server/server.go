@@ -284,7 +284,7 @@ func runWorker(client *rpc.Client, size, start, end int, currentWorld [][]uint8,
 		fmt.Println(err)
 	}
 	splitSegment <- res.Segment
-	splitFlipped <- res.Flipped
+	// splitFlipped <- res.Flipped
 }
 
 func setupWorkers(workers []*rpc.Client, size, workerNum int, currentWorld [][]uint8, splitSegments []chan [][]uint8, splitFlipped []chan []util.Cell) {
@@ -395,7 +395,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		// 다음 턴을 위해 world 교체
 		currentWorld = nextWorld
 		world.set(currentWorld, turn)
-		giveFlipped(sdlClient, flipped, turn)
+		// giveFlipped(sdlClient, flipped, turn)
 
 		makingSnapshot.Wait()
 
