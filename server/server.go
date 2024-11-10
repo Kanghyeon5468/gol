@@ -284,7 +284,7 @@ func runWorker(client *rpc.Client, size, start, end int, currentWorld [][]uint8,
 		fmt.Println(err)
 	}
 	splitSegment <- res.Segment
-	// splitFlipped <- res.Flipped
+	splitFlipped <- res.Flipped
 }
 
 func setupWorkers(workers []*rpc.Client, size, workerNum int, currentWorld [][]uint8, splitSegments []chan [][]uint8, splitFlipped []chan []util.Cell) {
@@ -311,13 +311,13 @@ func closeWorkers(workers []*rpc.Client) {
 	}
 }
 
-// func giveFlipped(sdlClient *rpc.Client, flipped []util.Cell, turn int) {
-// 	req := stubs.LiveRequest{Flipped: flipped, Turn: turn}
-// 	res := stubs.EmptyRes{}
-// 	if err := sdlClient.Call(stubs.GiveInfo, req, &res); err != nil {
-// 		fmt.Println(err)
-// 	}
-// }
+func giveFlipped(sdlClient *rpc.Client, flipped []util.Cell, turn int) {
+	req := stubs.LiveRequest{Flipped: flipped, Turn: turn}
+	res := stubs.EmptyRes{}
+	if err := sdlClient.Call(stubs.GiveInfo, req, &res); err != nil {
+		fmt.Println(err)
+	}
+}
 
 func dialWorkers(workerNum int) []*rpc.Client {
 	// serverAddress := "127.0.0.1"
@@ -382,7 +382,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		}
 	}
 	workers := dialWorkers(distWorkerNum)
-	// sdlClient := dialSdl()
+	sdlClient := dialSdl()
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
@@ -395,7 +395,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		// 다음 턴을 위해 world 교체
 		currentWorld = nextWorld
 		world.set(currentWorld, turn)
-		// giveFlipped(sdlClient, flipped, turn)
+		giveFlipped(sdlClient, flipped, turn)
 
 		makingSnapshot.Wait()
 
