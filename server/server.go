@@ -326,7 +326,7 @@ func dialWorkers(workerNum int) []*rpc.Client {
 	workers := make([]*rpc.Client, workerNum)
 
 	for i := 0; i < workerNum; i++ {
-		worker, err := rpc.Dial("tcp", fmt.Sprintf("%v%v", serverAddress, workerPorts[i]))
+		worker, err := rpc.Dial("tcp", fmt.Sprintf("%v%v", workerPrivateAddress[i]))
 		// worker, err := rpc.Dial("tcp", workerPrivateAddress[i])
 		if err != nil {
 			fmt.Println(err)
