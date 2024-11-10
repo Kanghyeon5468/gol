@@ -34,6 +34,7 @@ type Request struct {
 	OldWorld    [][]uint8
 	Turns       int
 	Threads     int
+	Workers     int
 	ImageWidth  int
 	ImageHeight int
 	Start       int
