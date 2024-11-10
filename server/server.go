@@ -12,9 +12,7 @@ import (
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
-var distWorkerNum int
-
-var workerCount int
+var distWorkerNum, threadNum int
 
 var quitting = make(chan bool, 1)
 
@@ -272,32 +270,46 @@ func makeNewWorld(height, width int) [][]uint8 {
 	return newWorld
 }
 
-func runWorker(client *rpc.Client, size, start, end int, currentWorld [][]uint8, splitSegment chan [][]uint8, splitFlipped chan []util.Cell) {
-	res := new(stubs.WorkerResponse)
-	req := stubs.WorkerRequest{
+func runWorker(client *rpc.Client, size, start, end, threads int, currentWorld [][]uint8, splitSegment chan [][]uint8) {
+	res := new(stubs.ParallelWorkerResponse)
+	req := stubs.ParallelWorkerRequest{
 		WholeWorld: currentWorld,
 		Start:      start,
 		End:        end,
 		Size:       size,
+		Threads:    threads,
 	}
-	if err := client.Call(stubs.CalculateWorldSegment, req, res); err != nil {
+	if err := client.Call(stubs.CalculateWorldSegmentParallel, req, res); err != nil {
 		fmt.Println(err)
 	}
 	splitSegment <- res.Segment
-	splitFlipped <- res.Flipped
 }
 
-func setupWorkers(workers []*rpc.Client, size, workerNum int, currentWorld [][]uint8, splitSegments []chan [][]uint8, splitFlipped []chan []util.Cell) {
+//func runWorker(client *rpc.Client, size, start, end, threads int, currentWorld [][]uint8, splitSegment chan [][]uint8) {
+//	res := new(stubs.WorkerResponse)
+//	req := stubs.WorkerRequest{
+//		WholeWorld: currentWorld,
+//		Start:      start,
+//		End:        end,
+//		Size:       size,
+//	}
+//	if err := client.Call(stubs.CalculateWorldSegment, req, res); err != nil {
+//		fmt.Println(err)
+//	}
+//	splitSegment <- res.Segment
+//}
+
+func setupWorkers(workers []*rpc.Client, threads, size, workerNum int, currentWorld [][]uint8, splitSegments []chan [][]uint8) {
 	numRows := size / workerNum
 
 	i := 0
 	for i < workerNum-1 {
-		go runWorker(workers[i], size, i*numRows, numRows*(i+1), currentWorld, splitSegments[i], splitFlipped[i])
+		go runWorker(workers[i], size, i*numRows, numRows*(i+1), threads, currentWorld, splitSegments[i])
 		i++
 	}
 
 	// final worker does the remaining rows
-	go runWorker(workers[i], size, i*numRows, size, currentWorld, splitSegments[i], splitFlipped[i])
+	go runWorker(workers[i], size, i*numRows, size, threads, currentWorld, splitSegments[i])
 }
 
 func closeWorkers(workers []*rpc.Client) {
@@ -337,26 +349,26 @@ func dialWorkers(workerNum int) []*rpc.Client {
 	return workers
 }
 
-func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, workerNum int) ([][]uint8, []util.Cell) {
+func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, workerNum, threads int) [][]uint8 {
 	var newWorld [][]uint8
-	var flipped []util.Cell
+	//var flipped []util.Cell
 
 	splitSegments := make([]chan [][]uint8, workerNum)
-	splitFlipped := make([]chan []util.Cell, workerNum)
+	//splitFlipped := make([]chan []util.Cell, workerNum)
 	for i := range splitSegments {
 		splitSegments[i] = make(chan [][]uint8)
-		splitFlipped[i] = make(chan []util.Cell)
+		//splitFlipped[i] = make(chan []util.Cell)
 	}
 
-	setupWorkers(workers, size, workerNum, currentWorld, splitSegments, splitFlipped)
+	setupWorkers(workers, threads, size, workerNum, currentWorld, splitSegments)
 	// no wait group needed as channel waits for worker to finish
 	for i := 0; i < workerNum; i++ {
 		newWorld = append(newWorld, <-splitSegments[i]...)
-		flipped = append(flipped, <-splitFlipped[i]...)
+		//flipped = append(flipped, <-splitFlipped[i]...)
 	}
 
 	//closeWorkers(workers)
-	return newWorld, flipped
+	return newWorld
 }
 
 func dialSdl() *rpc.Client {
@@ -368,8 +380,21 @@ func dialSdl() *rpc.Client {
 	return worker
 }
 
+func calculateFlipped(new [][]uint8, old [][]uint8) []util.Cell {
+	var cells []util.Cell
+
+	for i, item := range new {
+		for j := range item {
+			if new[i][j] != old[i][j] {
+				cells = append(cells, util.Cell{j, i})
+			}
+		}
+	}
+	return cells
+}
+
 func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
-	var flipped []util.Cell
+	//var flipped []util.Cell
 	currentWorld := req.OldWorld
 	nextWorld := makeNewWorld(req.ImageHeight, req.ImageWidth)
 	turn := 0
@@ -382,11 +407,12 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		}
 	}
 	workers := dialWorkers(distWorkerNum)
-	sdlClient := dialSdl()
+	//sdlClient := dialSdl()
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld, flipped = calculateNextWorld(workers, currentWorld, req.ImageWidth, distWorkerNum)
+		nextWorld = calculateNextWorld(workers, currentWorld, req.ImageHeight, distWorkerNum, threadNum)
+		//flipped = calculateFlipped(nextWorld, currentWorld)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
@@ -395,7 +421,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		// 다음 턴을 위해 world 교체
 		currentWorld = nextWorld
 		world.set(currentWorld, turn)
-		giveFlipped(sdlClient, flipped, turn)
+		//giveFlipped(sdlClient, flipped, turn)
 
 		makingSnapshot.Wait()
 
@@ -430,6 +456,7 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 	res.AliveCellLocation = getAliveCells(req.ImageHeight, req.ImageWidth, currentWorld)
 
 	if quit.get() {
+		closeWorkers(workers)
 		quitting <- true
 	}
 	return nil
@@ -437,10 +464,12 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 
 func main() {
 	serverPort := flag.String("port", "8030", "Port to Listen")
-	workers := flag.Int("threads", 1, "How many workers to use")
+	workers := flag.Int("workers", 1, "How many workers to use")
+	threads := flag.Int("threads", 1, "How many threads on each worker to use")
 	flag.Parse()
 
 	distWorkerNum = *workers
+	threadNum = *threads
 
 	rpc.Register(&Server{})
 	listener, err := net.Listen("tcp", "0.0.0.0:"+*serverPort)

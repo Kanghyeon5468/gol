@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/rpc"
 	"uk.ac.bris.cs/gameoflife/stubs"
-	"uk.ac.bris.cs/gameoflife/util"
 )
 
 type Node struct{}
@@ -14,7 +13,7 @@ type Node struct{}
 var quitting = make(chan bool, 1)
 
 func (n *Node) GetSegment(req stubs.WorkerRequest, res *stubs.WorkerResponse) error {
-	res.Segment, res.Flipped = calculateNextWorld(req.WholeWorld, req.Start, req.End, req.Size)
+	res.Segment = calculateNextWorld(req.WholeWorld, req.Start, req.End, req.Size)
 	return nil
 }
 
@@ -23,13 +22,13 @@ func (n *Node) Quit(_ stubs.WorkerRequest, _ *stubs.WorkerResponse) error {
 	return nil
 }
 
-func calculateNextWorld(world [][]uint8, start, end, width int) ([][]uint8, []util.Cell) {
+func calculateNextWorld(world [][]uint8, start, end, width int) [][]uint8 {
 	newWorld := make([][]uint8, end-start)
 	for i := 0; i < end-start; i++ {
 		newWorld[i] = make([]uint8, width)
 	}
 
-	var flipped []util.Cell
+	//var flipped []util.Cell
 
 	for y := start; y < end; y++ {
 		for x := 0; x < width; x++ {
@@ -37,21 +36,21 @@ func calculateNextWorld(world [][]uint8, start, end, width int) ([][]uint8, []ut
 			if world[y][x] == 255 {
 				if neighbors < 2 || neighbors > 3 {
 					newWorld[y-start][x] = 0
-					flipped = append(flipped, util.Cell{X: x, Y: y})
+					//flipped = append(flipped, util.Cell{X: x, Y: y})
 				} else {
 					newWorld[y-start][x] = 255
 				}
 			} else {
 				if neighbors == 3 {
 					newWorld[y-start][x] = 255
-					flipped = append(flipped, util.Cell{X: x, Y: y})
+					//flipped = append(flipped, util.Cell{X: x, Y: y})
 				} else {
 					newWorld[y-start][x] = 0
 				}
 			}
 		}
 	}
-	return newWorld, flipped
+	return newWorld
 }
 
 func calculateNeighbor(x, y int, world [][]uint8, width int) int {

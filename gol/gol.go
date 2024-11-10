@@ -4,6 +4,7 @@ package gol
 type Params struct {
 	Turns       int
 	Threads     int
+	Workers     int
 	ImageWidth  int
 	ImageHeight int
 }
