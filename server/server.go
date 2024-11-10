@@ -272,7 +272,7 @@ func makeNewWorld(height, width int) [][]uint8 {
 	return newWorld
 }
 
-func runWorker(client *rpc.Client, size, start, end int, currentWorld [][]uint8, splitSegment chan [][]uint8, splitFlipped chan []util.Cell) {
+func runWorker(client *rpc.Client, size, start, end int, currentWorld [][]uint8, splitSegment chan [][]uint8) {
 	res := new(stubs.WorkerResponse)
 	req := stubs.WorkerRequest{
 		WholeWorld: currentWorld,
@@ -284,20 +284,19 @@ func runWorker(client *rpc.Client, size, start, end int, currentWorld [][]uint8,
 		fmt.Println(err)
 	}
 	splitSegment <- res.Segment
-	splitFlipped <- res.Flipped
 }
 
-func setupWorkers(workers []*rpc.Client, size, workerNum int, currentWorld [][]uint8, splitSegments []chan [][]uint8, splitFlipped []chan []util.Cell) {
+func setupWorkers(workers []*rpc.Client, size, workerNum int, currentWorld [][]uint8, splitSegments []chan [][]uint8) {
 	numRows := size / workerNum
 
 	i := 0
 	for i < workerNum-1 {
-		go runWorker(workers[i], size, i*numRows, numRows*(i+1), currentWorld, splitSegments[i], splitFlipped[i])
+		go runWorker(workers[i], size, i*numRows, numRows*(i+1), currentWorld, splitSegments[i])
 		i++
 	}
 
 	// final worker does the remaining rows
-	go runWorker(workers[i], size, i*numRows, size, currentWorld, splitSegments[i], splitFlipped[i])
+	go runWorker(workers[i], size, i*numRows, size, currentWorld, splitSegments[i])
 }
 
 func closeWorkers(workers []*rpc.Client) {
@@ -308,14 +307,6 @@ func closeWorkers(workers []*rpc.Client) {
 			fmt.Println(err)
 		}
 		worker.Close()
-	}
-}
-
-func giveFlipped(sdlClient *rpc.Client, flipped []util.Cell, turn int) {
-	req := stubs.LiveRequest{Flipped: flipped, Turn: turn}
-	res := stubs.EmptyRes{}
-	if err := sdlClient.Call(stubs.GiveInfo, req, &res); err != nil {
-		fmt.Println(err)
 	}
 }
 
@@ -337,39 +328,25 @@ func dialWorkers(workerNum int) []*rpc.Client {
 	return workers
 }
 
-func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, workerNum int) ([][]uint8, []util.Cell) {
+func calculateNextWorld(workers []*rpc.Client, currentWorld [][]uint8, size, workerNum int) [][]uint8 {
 	var newWorld [][]uint8
-	var flipped []util.Cell
-
 	splitSegments := make([]chan [][]uint8, workerNum)
-	splitFlipped := make([]chan []util.Cell, workerNum)
 	for i := range splitSegments {
 		splitSegments[i] = make(chan [][]uint8)
-		splitFlipped[i] = make(chan []util.Cell)
 	}
 
-	setupWorkers(workers, size, workerNum, currentWorld, splitSegments, splitFlipped)
+	setupWorkers(workers, size, workerNum, currentWorld, splitSegments)
 	// no wait group needed as channel waits for worker to finish
 	for i := 0; i < workerNum; i++ {
-		newWorld = append(newWorld, <-splitSegments[i]...)
-		flipped = append(flipped, <-splitFlipped[i]...)
+		temp := <-splitSegments[i]
+		newWorld = append(newWorld, temp...)
 	}
 
 	//closeWorkers(workers)
-	return newWorld, flipped
+	return newWorld
 }
 
-// func dialSdl() *rpc.Client {
-// 	sdlAddress := "127.0.0.1:8020"
-// 	worker, err := rpc.Dial("tcp", sdlAddress)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-// 	return worker
-// }
-
 func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
-	// var flipped []util.Cell
 	currentWorld := req.OldWorld
 	nextWorld := makeNewWorld(req.ImageHeight, req.ImageWidth)
 	turn := 0
@@ -382,11 +359,10 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		}
 	}
 	workers := dialWorkers(distWorkerNum)
-	sdlClient := dialSdl()
 
 	for turnNum := 0; turnNum < req.Turns; turnNum++ {
 		// 매 턴마다 nextWorld를 새롭게 계산
-		nextWorld, flipped = calculateNextWorld(workers, currentWorld, req.ImageWidth, distWorkerNum)
+		nextWorld = calculateNextWorld(workers, currentWorld, req.ImageWidth, distWorkerNum)
 
 		// 결과를 응답 구조체에 설정
 		//res.AliveCell = getNumAliveCells(req.ImageHeight, req.ImageWidth, nextWorld)
@@ -395,11 +371,9 @@ func (s *Server) ProcessTurns(req stubs.Request, res *stubs.Response) error {
 		// 다음 턴을 위해 world 교체
 		currentWorld = nextWorld
 		world.set(currentWorld, turn)
-		giveFlipped(sdlClient, flipped, turn)
 
 		makingSnapshot.Wait()
 
-		//fmt.Println(turn)
 		if paused.get() {
 			pausedTurn.set(turn)
 			//waitingPause.Done()
