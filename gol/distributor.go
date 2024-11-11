@@ -3,7 +3,6 @@ package gol
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/rpc"
 	"sync"
 	"time"
@@ -259,14 +258,14 @@ func distributor(p Params, c distributorChannels, restart bool) {
 	}
 	defer client.Close()
 
-	rpc.Register(&LiveView{})
-	listener, err := net.Listen("tcp", "0.0.0.0:8020")
-	if err != nil {
-		log.Fatal("Listener error:", err)
-	}
-	log.Println("Server listening on port 8020")
-	defer listener.Close()
-	go rpc.Accept(listener)
+	//rpc.Register(&LiveView{})
+	//listener, err := net.Listen("tcp", "0.0.0.0:8020")
+	//if err != nil {
+	//	log.Fatal("Listener error:", err)
+	//}
+	//log.Println("Server listening on port 8020")
+	//defer listener.Close()
+	//go rpc.Accept(listener)
 
 	initialWorld := loadInitialState(p, c)
 	c.events <- StateChange{0, Executing}
@@ -275,6 +274,7 @@ func distributor(p Params, c distributorChannels, restart bool) {
 		OldWorld:    initialWorld,
 		Turns:       p.Turns,
 		Threads:     p.Threads,
+		Workers:     p.Workers,
 		ImageWidth:  p.ImageWidth,
 		ImageHeight: p.ImageHeight,
 		Restart:     restart,
