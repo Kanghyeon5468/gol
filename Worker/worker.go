@@ -27,26 +27,17 @@ func calculateNextWorld(world [][]uint8, start, end, width int) [][]uint8 {
 	for i := 0; i < end-start; i++ {
 		newWorld[i] = make([]uint8, width)
 	}
-
-	//var flipped []util.Cell
-
 	for y := start; y < end; y++ {
 		for x := 0; x < width; x++ {
 			neighbors := calculateNeighbor(x, y, world, width)
-			if world[y][x] == 255 {
-				if neighbors < 2 || neighbors > 3 {
-					newWorld[y-start][x] = 0
-					//flipped = append(flipped, util.Cell{X: x, Y: y})
-				} else {
-					newWorld[y-start][x] = 255
-				}
+			if neighbors < 2 || neighbors > 3 {
+				newWorld[y-start][x] = 0
+			} else if neighbors == 3 {
+				newWorld[y-start][x] = 255
+			} else if neighbors == 2 && world[y][x] == 255 {
+				newWorld[y-start][x] = 255
 			} else {
-				if neighbors == 3 {
-					newWorld[y-start][x] = 255
-					//flipped = append(flipped, util.Cell{X: x, Y: y})
-				} else {
-					newWorld[y-start][x] = 0
-				}
+				newWorld[y-start][x] = 0
 			}
 		}
 	}
