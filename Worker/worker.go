@@ -2,15 +2,85 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/rpc"
+	"sync"
 	"uk.ac.bris.cs/gameoflife/stubs"
 )
 
-type Node struct{}
+var nextWorker *rpc.Client
+
+var lowerBoundGive, lowerBoundGet, upperBoundGet, upperBoundGive []uint8
+
+var calculatingLowerBound, receivingLowerBound sync.WaitGroup
+
+type pixel struct {
+	X     int
+	Y     int
+	Value uint8
+}
+
+type Node struct {
+}
 
 var quitting = make(chan bool, 1)
+
+//func (n *Node) SendUpperBound(req stubs.WorkerRequest, res *stubs.WorkerResponse) error {
+//	if req.Worker != nil {
+//		err := req.Worker.Call("Node.ReceiveUpperBound", req, res)
+//		if err != nil {
+//			log.Println("Error sending upper bound:", err)
+//			return err
+//		}
+//	}
+//	return nil
+//}
+//
+//func (n *Node) SendLowerBound(req stubs.WorkerRequest, res *stubs.WorkerResponse) error {
+//	if req.Worker != nil {
+//		err := req.Worker.Call("Node.ReceiveLowerBound", req, res)
+//		if err != nil {
+//			log.Println("Error sending lower bound:", err)
+//			return err
+//		}
+//	}
+//	return nil
+//}
+//
+//func (n *Node) ReceiveUpperBound(req stubs.WorkerRequest) error {
+//	req.UpperBound = req.WholeWorld[req.Size-1 : req.Size]
+//	log.Println("Received upper boundary:", req.UpperBound)
+//	return nil
+//}
+//	func (n *Node) ReceiveLowerBound(req stubs.WorkerRequest) error {
+//		req.LowerBound = req.WholeWorld[0:1] // Store the lower row
+//		log.Println("Received lower boundary:", req.LowerBound)
+//		return nil
+//	}
+
+//func upperBound(world [][]uint8, end, start, size int) [][]uint8 {
+//	var upperBound [][]uint8
+//	if start == 0 {
+//		upperBound = world[size-1 : size]
+//	} else {
+//		upperBound = world[start-1 : start]
+//	}
+//	world = append(upperBound, world...)
+//	return world
+//}
+//
+//func lowerBound(world [][]uint8, end, start, size int) [][]uint8 {
+//	var lowerBound [][]uint8
+//	if end == size-1 {
+//		lowerBound = world[0:1]
+//	} else {
+//		lowerBound = world[end+1 : end+2]
+//	}
+//	world = append(lowerBound, world...)
+//	return world
+//}
 
 func (n *Node) GetSegment(req stubs.WorkerRequest, res *stubs.WorkerResponse) error {
 	res.Segment = calculateNextWorld(req.WholeWorld, req.Start, req.End, req.Size)
@@ -75,11 +145,42 @@ func calculateNeighbor(x, y int, world [][]uint8, width int) int {
 	return aliveNeighbor
 }
 
+func (n *Node) ConnectToNextWorker(req stubs.AddressReq, _ *stubs.EmptyRes) error {
+	worker, err := rpc.Dial("tcp", req.Address)
+	if err != nil {
+		return err
+	}
+	nextWorker = worker
+	return nil
+}
+
+func (n *Node) AcceptPartialRows(req stubs.HaloRowsReq, res stubs.HaloRowsRes) error {
+	lowerBoundGet = req.Row
+	receivingLowerBound.Done()
+	calculatingLowerBound.Wait()
+	res.Row = lowerBoundGive
+	return nil
+}
+
+func giveRowsWorker(partialRow []uint8) []uint8 {
+	res := new(stubs.HaloRowsRes)
+	req := stubs.HaloRowsReq{
+		Row: partialRow,
+	}
+	if err := nextWorker.Call(stubs.PartialRows, req, &res); err != nil {
+		fmt.Println(err)
+	}
+	return res.Row
+}
+
 func main() {
 	serverPort := flag.String("port", "8040", "Port to Listen")
 	flag.Parse()
 
-	rpc.Register(&Node{})
+	// Initialize Node and neighbors map
+	node := &Node{}
+
+	rpc.Register(node)
 	listener, err := net.Listen("tcp", "0.0.0.0:"+*serverPort)
 	if err != nil {
 		log.Fatal("Listener error:", err)
